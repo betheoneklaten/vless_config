@@ -9,12 +9,9 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-LOCAL_MODE = "on"
-FILE_PATH = "/home/runner/workspace/app/configs.txt"
 SUB_NAME = "HFK"
-SERVER_NAME = "localhost"
-PORT = "8000"
 URL = "sub"
+CONFIG_URLS = "https://api.github.com/.../file.txt"
 
 [workflows]
 runButton = "Project"

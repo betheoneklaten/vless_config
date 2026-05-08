@@ -1,11 +1,12 @@
+import logging.handlers
 import os
 import httpx
 import base64
 import logging
-import logging.handlers
 from asyncio import gather
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, HTTPException
+import uvicorn
 
 
 # Logging configuration with rotation every 3 days
@@ -35,55 +36,46 @@ load_dotenv()
 
 async def fetch_links() -> tuple[list[str], list[str]]:
     '''
-    Fetches the configuration source file from GitHub or local .txt file.\n
+    Fetches the configuration source file from GitHub.\n
     Returns a tuple of two lists:
         - HTTP subscription links
         - Direct vless configuration links
     '''
+    github_token = os.getenv('GITHUB_TOKEN')
+    headers = {}
+    if github_token:
+        headers = {
+            "Authorization": f"token {os.getenv('GITHUB_TOKEN')}",
+            "Accept": "application/vnd.github.v3.raw"
+        }
     try:
-        if os.getenv('LOCAL_MODE') == 'on':
-            with open('configs.txt', encoding='utf-8') as file:
-                lines = file.readlines()
-
-        else:
-            github_token = os.getenv('GITHUB_TOKEN')
-            headers = {}
-            # If token is provided, use it for private repo access
-            if github_token:
-                headers = {
-                    "Authorization": f"token {github_token}",
-                    "Accept": "application/vnd.github.v3.raw"
-                }
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    os.getenv('CONFIG_URL'),
-                    headers=headers,
-                    timeout=6
-                )
-                response.raise_for_status()
-                lines = response.text.splitlines()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                os.getenv('CONFIG_URLS'),
+                headers=headers,
+                timeout=6
+            )
+            response.raise_for_status()
+            lines = response.text.splitlines()
             
-        sub_links = [
-            line.strip()
-            for line in lines
-            if line.strip().startswith('http')
-        ]
-        vless_links = [
-            line.strip()
-            for line in lines
-            if line.strip().startswith('vless://')
-        ]
+            sub_links = [
+                line.strip()
+                for line in lines
+                if line.strip().startswith('http')
+            ]
+            vless_links = [
+                line.strip()
+                for line in lines
+                if line.strip().startswith('vless://')
+            ]
             
-        return sub_links, vless_links
+            return sub_links, vless_links
     except httpx.HTTPStatusError as e:
         logger.critical(f"GitHub fetch error: {str(e)}")
         raise HTTPException(
             status_code=404,
             detail="Config file not found"
         )
-    except FileNotFoundError as e:
-        logger.critical(e)
-        raise e
 
 
 async def fetch_subscription(
@@ -126,7 +118,6 @@ async def merge_all(sub_links: list[str], vless_links: list[str], sub_id: str) -
         tmp = await gather(*decoded_subs)
         data = [x for x in tmp if x is not None]
         
-        # If there is no configs at all
         if not data and not vless_links:
             logger.error("No subscriptions or configurations available")
             raise HTTPException(
@@ -136,7 +127,7 @@ async def merge_all(sub_links: list[str], vless_links: list[str], sub_id: str) -
         elif not data:
             logger.warning("No subscriptions available")
 
-        encoded_vless_links = [link.encode() for link in vless_links]
+        encoded_vless_links = [link.encode('utf-8') for link in vless_links]
         merged_subs = b''.join(data)
         merged_configs = b'\n'.join(encoded_vless_links)
 
@@ -164,3 +155,6 @@ async def main(sub_id: str = "") -> Response:
     global_sub = base64.b64encode(result)
 
     return Response(content=global_sub, media_type='text/plain')
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", reload=True)
