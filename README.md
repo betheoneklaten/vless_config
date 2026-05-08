@@ -1,24 +1,17 @@
-<div align="center" markdown>
+# 3x-ui_subscriptions_aggregator
+Обратный прокси для асинхронного получения и объединения подписок по заданным URL и ID.
 
-<p align="center">
-    <a href="https://github.com/NoisyCake/3x-ui_subscriptions_aggregator/blob/main/README.md"><u><b>ENGLISH</b></u></a> •
-    <a href="https://github.com/NoisyCake/3x-ui_subscriptions_aggregator/blob/main/README.ru.md"><u><b>РУССКИЙ</b></u></a>
-</p>
-
-# vless_config_aggregator
-
-A reverse proxy that aggregates multiple VLESS configurations from various services into a single unified subscription link.
-</div>
-
-## Prepare
+Подробное описание проекта доступно на сайте автора: https://noisycake.ru/projects/subs_aggregator
 
 > [!NOTE]
-> This guide is relevant for Debian-based Linux distributions. Most testing was done with the sing-box client Hiddify
+> Инструкция актуальна для Debian-based дистрибутивов Linux
 
-### Certificate
-This service requires a valid SSL certificate, so you'll need to get it first.
+## Подготовка
 
-Once your domain is set up, generate a certificate using the following (make sure ports 80 and/or 443 are open):
+### Сертификат
+Сервис подразумевает обязательное наличие SSL сертификата, поэтому для начала необходимо его создать (если ещё нет). Для этого потребуется домен, привязанный к IP-адресу сервера, на котором планируется установка приложения.
+
+После получения домена выполните следующие команды (порты 80 и 443 должны быть открыты):
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install certbot
@@ -26,83 +19,57 @@ sudo apt install certbot
 sudo certbot certonly --standalone -d <domain> --register-unsafely-without-email
 ```
 
-The certificates will be located in: "/etc/letsencrypt/live/<domain>/"
+Ключи будут лежать по пути "/etc/letsencrypt/live/<domain>/"
 
-### Subscriptions
-If you want aggregate not only direct links (`vless://`) but also subscription URLs, you'll need to enable Subscription on each panel in settings.  
-All clients you want to merge must share the same **subscription ID**.
+### Подписки
+Для каждого сервера с 3x-ui нужно настроить функцию подписки. Для клиентов, подписки которых вы хотите объединить, требуется установить одинаковый **subscription_id**.
 
-![Server 1](https://i.ibb.co/672ypTMt/image.png)
+![Сервер 1](https://i.ibb.co/672ypTMt/image.png)
 
-![Server 2](https://i.ibb.co/sSn9byZ/2025-03-18-153330.png)
-
-### Configuration file
-To get the service up and running, you'll also need a plain `.txt` file with your list configurations available on GitHub or locally.
-
-As mentioned above, both subscription and direct VLESS links are supported:
-1. Direct `vless://` links go into the file as-is.
-2. For subscription links, you must strip out the subscription ID part. For example, `https://<domain>:<port>/<url>/<subscription_id>` -> `https://<domain>:<port>/<url>/` (make sure the is a trailing slash).
-
-Example:
-```txt
-https://subscription_link_example:1/imy/
-https://subscription_link_example:2/sub/
-vless://...
-vless://...
-vless://...
-```
+![Сервер 2](https://i.ibb.co/sSn9byZ/2025-03-18-153330.png)
 
 ---
-## Installing & Setup
+## Установка и настройка
 
-Download and install required tools:
+Скачаем и установим необходимые инструменты:
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install git curl
+sudo apt update && sudo apt upgrade -y && sudo apt install git && sudo apt install curl
 
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 ```
 
-Download repo:
+Скачиваем репозиторий:
 ```bash
-git clone https://github.com/NoisyCake/vless_config_aggregator.git
-cd vless_config_aggregator
+git clone https://github.com/NoisyCake/3x-ui_subscriptions_aggregator.git
+cd 3x-ui_subscriptions_aggregator
 cp .env.template .env
 ```
 
-### Environment variables
-Edit the `.env` file with your own values:
+### Переменные окружения
+В файле `.env` содержатся несколько переменных, которые нужно настроить:
 |variable|description|example|
 |:--:|:--|:--|
-|LOCAL_MODE|If enabled, the file will be read from the local host. Otherwise, it will be fetched from a remote repository.|on|
-|FILE_PATH|Absolute path to the `.txt` configuration file|/path/to/configs.txt|
-|CONFIG_URL|Link to the `.txt` configuration file hosted on GitHub|https://api.github.com/.../file.txt|
-|GITHUB_TOKEN|GitHub token (required if the file is in a private repo)|ghp_dhoauigc7898374yduisdhSDHFHGf7|
-|SUB_NAME|Display name for the subscription in clients. If empty, the subscription ID will be used in most cases|HFK|
-|SERVER_NAME|Your server’s domain name|domain.or.subdomain|
-|PORT|Port the service should run on|443|
-|URL|Path segment used in the final subscription URL|sub|
-|CERT_PATH|Absolute path to your SSL certificate directory|/etc/letsencrypt/live/domain.or.subdomain|
+|SUB_URLS|Адреса прокси-серверов, на которых работает 3x-ui с функцией подписки|'https://first.server.com:41570/subscription/ https://second.server.com:7081/sub/'|
+|SUB_NAME|Имя подписки, которое будет отображаться в клиенте. Если не указана, именем станет subscription_id из 3x-ui|HFK|
+|SERVER_NAME|Доменное имя сервера, на котором установлено приложение|domain.or.subdomain|
+|PORT|Порт, на котором будет работать приложение (по возможности оставьте дефолтный)|443|
+|URL|Часть пути подписки|sub|
+|CERT_PATH|Путь к SSL/TLS сертификату|/etc/letsencrypt/live/domain.or.subdomain|
 
 ---
-## Running the Service
+## Запуск
 
-Start everything via Docker: `sudo docker compose up --build -d`.
+Запуск происходит командой `docker compose up --build -d`.
 
-The final aggregated link will depend on the contents of your config file and your purposes:
-1. If there are only direct links or subscription links aren’t needed: `https://{SERVER_NAME}:{PORT}/{URL}/{SUB_NAME}`;
-2. If subscriptions are used: `https://{SERVER_NAME}:{PORT}/{URL}/subscription_id/{SUB_NAME}`.
-
-In both cases, the `/{SUB_NAME}` part is obviously unnecessary if the variable is empty.
+Новая подписка будет доступна по адресу `https://{SERVER_NAME}:{PORT}/{URL}/subscription_id/{SUB_NAME}`, где subscription_id — имя подписки в 3x-ui серверах.
 
 ---
-## License
+## Лицензия
 
-MIT licensed — see LICENSE for details.
+Проект распространяется под лицензией MIT. Подробности в файле `LICENSE`.
 
 ---
-## Changelog & Feedback
+## Изменения
 
-You can track version changes on the Releases page.
-Suggestions, bug reports, and pull requests are welcome!
+Буду рад любой критике и предложениям по улучшению!
